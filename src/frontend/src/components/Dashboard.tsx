@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { api } from '../api';
 import { API } from '../constants';
 import { statusToBadgeClass } from '../utils/service';
@@ -61,6 +62,7 @@ export default function Dashboard() {
   const { openModal, closeModal } = useModal();
   const { alert } = useConfirm();
   const { isAdmin } = useAuth();
+  const navigate = useNavigate();
 
   useEffect(() => {
     let cancelled = false;
@@ -299,8 +301,16 @@ export default function Dashboard() {
                 const load = typeof d?.['ups.load'] === 'number' ? d['ups.load'] : null;
                 const chargeColor = charge != null ? getBatteryChargeColor(charge) : 'var(--green)';
                 const loadColor = load != null ? getLoadColor(load) : 'var(--accent)';
+                const openDetail = () => navigate('/ups/' + encodeURIComponent(u.name));
                 return (
-                  <div key={u.name} className="dash-ups-tr">
+                  <div
+                    key={u.name}
+                    className="dash-ups-tr clickable"
+                    role="link"
+                    tabIndex={0}
+                    onClick={openDetail}
+                    onKeyDown={e => { if (e.key === 'Enter') openDetail(); }}
+                  >
                     <span className="dash-ups-name">{u.name}</span>
                     <span className="dash-ups-gauge-cell">
                       {charge != null && <Gauge value={charge} size={44} color={chargeColor} />}

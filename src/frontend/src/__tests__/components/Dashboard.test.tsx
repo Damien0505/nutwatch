@@ -1,21 +1,32 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { MemoryRouter, Routes, Route, useParams } from 'react-router-dom';
 import Dashboard from '../../components/Dashboard';
 import { ModalProvider } from '../../components/Modal';
 import { ConfirmProvider } from '../../components/ConfirmDialog';
 import { AuthProvider } from '../../AuthProvider';
 import { API } from '../../constants';
 
+function UpsDetailStub() {
+  const { name } = useParams();
+  return <div>UPS detail page: {name}</div>;
+}
+
 function renderDashboard() {
   return render(
-    <AuthProvider>
-      <ConfirmProvider>
-        <ModalProvider>
-          <Dashboard />
-        </ModalProvider>
-      </ConfirmProvider>
-    </AuthProvider>
+    <MemoryRouter initialEntries={['/']}>
+      <AuthProvider>
+        <ConfirmProvider>
+          <ModalProvider>
+            <Routes>
+              <Route path="/" element={<Dashboard />} />
+              <Route path="/ups/:name" element={<UpsDetailStub />} />
+            </Routes>
+          </ModalProvider>
+        </ConfirmProvider>
+      </AuthProvider>
+    </MemoryRouter>
   );
 }
 
@@ -104,6 +115,31 @@ describe('Dashboard', () => {
       expect(screen.getByText('85%')).toBeInTheDocument();
       expect(screen.getByText('22%')).toBeInTheDocument();
     });
+  });
+
+  it('navigates to the UPS detail page when a UPS row is clicked', async () => {
+    const user = userEvent.setup();
+    renderDashboard();
+    await waitFor(() => expect(screen.getByText('ups2')).toBeInTheDocument());
+
+    // Click a gauge cell rather than the name to prove the whole row is the target.
+    await waitFor(() => expect(screen.getByText('22%')).toBeInTheDocument());
+    await user.click(screen.getByText('22%'));
+
+    expect(await screen.findByText('UPS detail page: ups2')).toBeInTheDocument();
+  });
+
+  it('navigates to the UPS detail page when Enter is pressed on a focused UPS row', async () => {
+    const user = userEvent.setup();
+    renderDashboard();
+    await waitFor(() => expect(screen.getByText('ups1')).toBeInTheDocument());
+
+    const rows = screen.getAllByRole('link');
+    expect(rows).toHaveLength(MOCK_UPS_LIST.length);
+    rows[0].focus();
+    await user.keyboard('{Enter}');
+
+    expect(await screen.findByText('UPS detail page: ups1')).toBeInTheDocument();
   });
 
   it('shows empty state when no UPS devices', async () => {

@@ -365,6 +365,21 @@
   border-bottom: none;
 }
 
+.dash-ups-tr.clickable {
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+  transition: background var(--transition);
+}
+
+.dash-ups-tr.clickable:hover {
+  background: var(--surface-hover);
+}
+
+.dash-ups-tr.clickable:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
 .dash-ups-th {
   font-size: 0.65rem;
   text-transform: uppercase;
