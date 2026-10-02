@@ -31,6 +31,22 @@ function isDynamicVar(name: string): boolean {
   return METRIC_LEAVES.has(leaf);
 }
 
+interface DisplayUnit {
+  factor: number;
+  unit: string;
+  axisTitle: string;
+}
+
+// NUT reports *.runtime in seconds, which reads poorly on a chart (e.g. 4968);
+// plot it in minutes instead. Only the drawn values change, not the stored data.
+const DISPLAY_UNITS: Record<string, DisplayUnit> = {
+  runtime: { factor: 1 / 60, unit: 'min', axisTitle: 'minutes' },
+};
+
+function displayUnitFor(name: string): DisplayUnit | null {
+  return DISPLAY_UNITS[name.slice(name.lastIndexOf('.') + 1)] ?? null;
+}
+
 function formatTime(ts: number, range: string): string {
   const d = new Date(ts * 1000);
   if (range === '1h') return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
@@ -79,7 +95,16 @@ function drawChart(svgEl: SVGSVGElement, data: SeriesMap, selectedVars: string[]
   const allPoints: { t: number; v: number }[] = [];
   const series = selectedVars
     .filter(v => data[v])
-    .map(v => ({ name: v, points: downsample(data[v], maxPoints) }));
+    .map(v => {
+      const du = displayUnitFor(v);
+      const pts = downsample(data[v], maxPoints);
+      return {
+        name: v,
+        unit: du?.unit ?? '',
+        axisTitle: du?.axisTitle ?? '',
+        points: du ? pts.map(([t, val]): DataPoint => [t, val * du.factor]) : pts,
+      };
+    });
   for (const s of series) {
     for (const p of s.points) {
       allPoints.push({ t: p[0], v: p[1] });
@@ -148,6 +173,20 @@ function drawChart(svgEl: SVGSVGElement, data: SeriesMap, selectedVars: string[]
     label.setAttribute('font-size', '11');
     label.textContent = v.toFixed(1);
     content.appendChild(label);
+  }
+
+  // The y-axis is shared by every selected series, so it can only carry a unit
+  // title when they all use the same display unit (e.g. runtime on its own).
+  const axisTitles = new Set(series.map(s => s.axisTitle));
+  if (axisTitles.size === 1 && series[0].axisTitle) {
+    const title = document.createElementNS(ns, 'text');
+    title.setAttribute('class', 'chart-axis-title');
+    title.setAttribute('transform', `translate(14, ${margin.top + innerH / 2}) rotate(-90)`);
+    title.setAttribute('text-anchor', 'middle');
+    title.setAttribute('fill', 'var(--text-muted)');
+    title.setAttribute('font-size', '11');
+    title.textContent = series[0].axisTitle;
+    content.appendChild(title);
   }
 
   // Adapt the number of x-axis ticks to the available width and the rendered
@@ -265,7 +304,7 @@ function drawChart(svgEl: SVGSVGElement, data: SeriesMap, selectedVars: string[]
         const dist = Math.abs(p[0] - closestT);
         if (dist < minDist) { minDist = dist; closest = p; }
       }
-      return { name: s.name, val: closest ? closest[1] : null, color: COLORS[si % COLORS.length] };
+      return { name: s.name, unit: s.unit, val: closest ? closest[1] : null, color: COLORS[si % COLORS.length] };
     });
 
     tooltip.textContent = '';
@@ -280,7 +319,7 @@ function drawChart(svgEl: SVGSVGElement, data: SeriesMap, selectedVars: string[]
       dot.className = 'chart-tooltip-dot';
       dot.style.background = l.color;
       row.appendChild(dot);
-      const valStr = l.val != null ? l.val.toFixed(1) : '—';
+      const valStr = l.val != null ? l.val.toFixed(1) + (l.unit ? ` ${l.unit}` : '') : '—';
       const strong = document.createElement('strong');
       strong.textContent = valStr;
       row.appendChild(document.createTextNode(`${l.name}: `));
@@ -418,16 +457,20 @@ export default function HistoryChart({ upsName }: HistoryChartProps) {
           ))}
         </div>
         <div className="history-var-selector">
-          {availableVars.map(v => (
-            <label key={v} className="history-var-checkbox">
-              <input
-                type="checkbox"
-                checked={!!selectedVars[v]}
-                onChange={() => toggleVar(v)}
-              />
-              <span>{v}</span>
-            </label>
-          ))}
+          {availableVars.map(v => {
+            const du = displayUnitFor(v);
+            return (
+              <label key={v} className="history-var-checkbox">
+                <input
+                  type="checkbox"
+                  checked={!!selectedVars[v]}
+                  onChange={() => toggleVar(v)}
+                />
+                <span>{v}</span>
+                {du && <span className="history-var-unit">({du.unit})</span>}
+              </label>
+            );
+          })}
         </div>
       </div>
 

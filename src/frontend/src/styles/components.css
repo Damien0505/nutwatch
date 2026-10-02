@@ -1678,6 +1678,11 @@ textarea#config-editor {
   margin: 0;
 }
 
+.history-var-unit {
+  color: var(--text-muted);
+  font-size: 0.75rem;
+}
+
 .chart-container {
   background: var(--surface);
   border: 1px solid var(--border-subtle);

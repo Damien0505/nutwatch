@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import HistoryChart from '../../components/HistoryChart';
 
 vi.mock('../../api', () => ({
@@ -145,6 +146,60 @@ describe('HistoryChart', () => {
       const btn = screen.getByText('24h');
       expect(btn.className).toContain('active');
     });
+  });
+
+  it('plots battery.runtime in minutes with a minutes axis title', async () => {
+    mockApi
+      .mockResolvedValueOnce({ variables: ['battery.runtime'] })
+      .mockResolvedValueOnce({
+        variables: { 'battery.runtime': [[1000000, 4968], [1000060, 4800]] },
+      });
+
+    renderChart();
+    // 4968 s / 60 = 82.8 min and 4800 s / 60 = 80.0 min are the y-axis extremes.
+    await waitFor(() => {
+      const labels = Array.from(document.querySelectorAll('.chart-svg text')).map(t => t.textContent);
+      expect(labels).toContain('82.8');
+      expect(labels).toContain('80.0');
+    });
+    const labels = Array.from(document.querySelectorAll('.chart-svg text')).map(t => t.textContent);
+    expect(labels).not.toContain('4968.0');
+    expect(document.querySelector('.chart-axis-title')?.textContent).toBe('minutes');
+  });
+
+  it('labels runtime variables with their display unit', async () => {
+    mockApi
+      .mockResolvedValueOnce({ variables: ['battery.charge', 'battery.runtime'] })
+      .mockResolvedValueOnce(MOCK_DATA);
+
+    renderChart();
+    await waitFor(() => {
+      expect(screen.getByText('battery.runtime')).toBeInTheDocument();
+    });
+    expect(screen.getByText('(min)')).toBeInTheDocument();
+    expect(screen.getAllByText(/^\(.*\)$/)).toHaveLength(1);
+  });
+
+  it('omits the axis title when runtime shares the chart with other series', async () => {
+    mockApi
+      .mockResolvedValueOnce({ variables: ['battery.charge', 'battery.runtime'] })
+      .mockResolvedValueOnce({
+        variables: {
+          'battery.charge': [[1000000, 100], [1000060, 99]],
+          'battery.runtime': [[1000000, 4968], [1000060, 4800]],
+        },
+      });
+
+    const user = userEvent.setup();
+    renderChart();
+    await waitFor(() => {
+      expect(document.querySelectorAll('.chart-svg path').length).toBe(1);
+    });
+    await user.click(screen.getByLabelText(/battery\.runtime/));
+    await waitFor(() => {
+      expect(document.querySelectorAll('.chart-svg path').length).toBe(2);
+    });
+    expect(document.querySelector('.chart-axis-title')).toBeNull();
   });
 
   it('defaults to battery.charge and ups.load checked', async () => {
